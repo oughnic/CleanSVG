@@ -53,7 +53,7 @@ This tool bridges the gap, making StarUML diagrams fully compatible with Word's 
 
 ### Basic Usage
 
-Process all SVG files in the default directory:
+Process all SVG files in the current directory:
 
 ```bash
 CleanSVG.exe
@@ -89,13 +89,22 @@ Process files without changing fonts:
 CleanSVG.exe "C:\Path\To\SVG\Files" --no-font-change
 ```
 
+### Using Current Directory
+
+Use `.` to explicitly specify the current directory:
+
+```bash
+CleanSVG.exe . --font "Arial"
+```
+
 ## Command-Line Parameters
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `[directory]` | Path to directory containing SVG files | `C:\Users\Nicholas\OneDrive - Oughtibridge Ltd\ContSys\ContSys 2026 FDIS\Large Diagrams\svg` |
+| `[directory]` | Path to directory containing SVG files | Current directory |
 | `--font <name>` or `-f <name>` | Target font family for conversion | `Cambria` |
 | `--no-font-change` | Skip font conversion entirely | (font change enabled) |
+| `--help`, `-h`, `-?` | Display help message | - |
 
 ## Processing Details
 
@@ -115,6 +124,11 @@ The tool performs the following operations on each SVG file:
 The tool provides detailed console output:
 
 ```
+CleanSVG - StarUML to Microsoft Word SVG Converter
+===================================================
+Directory: C:\My\SVG\Files
+Target font: Cambria
+
 Found 5 SVG files to process...
 
 Processing: ClassDiagram1.svg
@@ -140,10 +154,11 @@ Files unchanged: 0
 ## Typical Workflow
 
 1. **Design** your UML diagrams in StarUML
-2. **Export** diagrams as SVG files
-3. **Run CleanSVG** on the exported files
-4. **Import** the processed SVG files into Microsoft Word
-5. **Use** in your ISO documentation
+2. **Export** diagrams as SVG files to a directory
+3. **Navigate** to that directory in command prompt/terminal
+4. **Run** `CleanSVG.exe` (or specify the directory)
+5. **Import** the processed SVG files into Microsoft Word
+6. **Use** in your ISO documentation
 
 ## Technical Notes
 
@@ -178,6 +193,12 @@ Get-ChildItem *.backup | ForEach-Object { Copy-Item $_ ($_.Name -replace '\.back
 
 ## Troubleshooting
 
+### No SVG Files Found
+
+- Ensure you're in the correct directory or specify the full path
+- Check that files have the `.svg` extension
+- Verify the directory exists
+
 ### Word Still Not Importing
 
 - Verify the SVG opens correctly in a web browser
@@ -196,6 +217,25 @@ Get-ChildItem *.backup | ForEach-Object { Copy-Item $_ ($_.Name -replace '\.back
 - Check console output for "Fonts changed" count
 - Ensure source SVG uses Arial or the expected source font
 
+## Quick Start Examples
+
+```bash
+# Process current directory with default settings
+CleanSVG.exe
+
+# Process specific directory
+CleanSVG.exe "D:\Projects\UML\Diagrams"
+
+# Custom font for specific ISO standard
+CleanSVG.exe "D:\ISO-27001\Diagrams" --font "Times New Roman"
+
+# Keep original Arial fonts
+CleanSVG.exe . --no-font-change
+
+# Show help
+CleanSVG.exe --help
+```
+
 ## License
 
 This tool is provided as-is for processing StarUML SVG files for ISO documentation purposes.
@@ -205,6 +245,12 @@ This tool is provided as-is for processing StarUML SVG files for ISO documentati
 Developed for the ContSys 2026 FDIS documentation project.
 
 ## Version History
+
+### v1.1.0
+- Removed hard-coded directory path
+- Default to current directory
+- Added check for no SVG files found
+- Improved error messages
 
 ### v1.0.0
 - Initial release
