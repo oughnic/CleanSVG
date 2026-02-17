@@ -93,6 +93,45 @@ class Program
             }
         }
 
+        // Step 1.5: Add pale blue debug background
+        // Check if debug background already exists
+        var existingDebugBg = svgRoot.Elements(svg + "rect")
+            .FirstOrDefault(r => r.Attribute("id")?.Value == "debug-background");
+        
+        if (existingDebugBg == null)
+        {
+            // Get viewBox or dimensions for background size
+            var viewBox = svgRoot.Attribute("viewBox")?.Value;
+            string bgWidth = "100%";
+            string bgHeight = "100%";
+            
+            if (viewBox != null)
+            {
+                var parts = viewBox.Split(' ');
+                if (parts.Length == 4)
+                {
+                    bgWidth = parts[2];
+                    bgHeight = parts[3];
+                }
+            }
+            
+            // Create debug background rectangle with pale blue color (#E6F2FF)
+            var debugRect = new XElement(svg + "rect",
+                new XAttribute("id", "debug-background"),
+                new XAttribute("x", "0"),
+                new XAttribute("y", "0"),
+                new XAttribute("width", bgWidth),
+                new XAttribute("height", bgHeight),
+                new XAttribute("fill", "#E6F2FF"),
+                new XAttribute("stroke", "none")
+            );
+            
+            // Insert as first child so it appears behind everything
+            svgRoot.AddFirst(debugRect);
+            modified = true;
+            Console.WriteLine($"    Added pale blue debug background (#E6F2FF)");
+        }
+
         // Step 2: Get the common transform matrix if present
         Matrix transformMatrix = null;
         var mainGroup = svgRoot.Elements(svg + "g").FirstOrDefault();
