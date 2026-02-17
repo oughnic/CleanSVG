@@ -262,6 +262,7 @@ class Program
             // - White rectangles with stroke (class borders)
             // - White rectangles without explicit stroke="none"
             // - Any rectangle that might be structural
+            // Note: Class borders in StarUML are drawn as separate <path> elements, not rect strokes
 
             if (shouldRemove)
             {
@@ -305,6 +306,10 @@ class Program
         // Apply transform to rect elements
         foreach (var rect in group.Elements(svg + "rect"))
         {
+            // Skip the debug background rectangle
+            if (rect.Attribute("id")?.Value == "debug-background")
+                continue;
+
             var x = double.Parse(rect.Attribute("x")?.Value ?? "0", CultureInfo.InvariantCulture);
             var y = double.Parse(rect.Attribute("y")?.Value ?? "0", CultureInfo.InvariantCulture);
             var width = double.Parse(rect.Attribute("width")?.Value ?? "0", CultureInfo.InvariantCulture);
@@ -339,7 +344,7 @@ class Program
             modified = true;
         }
 
-        // Apply transform to path elements
+        // Apply transform to path elements (including class borders!)
         foreach (var path in group.Elements(svg + "path"))
         {
             var d = path.Attribute("d")?.Value;
@@ -360,20 +365,23 @@ class Program
 
     static string TransformPathData(string pathData, Matrix matrix)
     {
-        // This is a simplified transform - only handles M, L, Z commands
+        // Enhanced path transform - handles M, L, Z commands
+        // This is critical for class border paths like "M x1 y1 L x2 y2 L x3 y3 L x4 y4 L x1 y1 Z"
         var commands = Regex.Matches(pathData, @"[MLZ]\s*[\d\.\s-]+|Z");
         var result = new System.Text.StringBuilder();
 
         foreach (Match cmd in commands)
         {
             var cmdStr = cmd.Value.Trim();
-            if (cmdStr == "Z")
+            if (cmdStr == "Z" || cmdStr.Length == 1)
             {
                 result.Append(" Z");
                 continue;
             }
 
-            var parts = cmdStr.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var parts = cmdStr.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0) continue;
+
             result.Append($" {parts[0]}");
 
             for (int i = 1; i < parts.Length; i += 2)
@@ -401,11 +409,13 @@ class Program
         foreach (var group in groups)
         {
             // Be more careful - only remove groups that are truly empty
-            // Don't remove groups that contain rectangles (they might be class containers)
+            // Don't remove groups that contain rectangles or paths (they might be class containers or borders)
             bool hasRectangles = group.Elements(svg + "rect").Any();
+            bool hasPaths = group.Elements(svg + "path").Any();
             bool hasContent = group.HasElements && group.Elements().Any(e => !string.IsNullOrWhiteSpace(e.Value) || e.HasElements);
             
-            if (!hasContent && !hasRectangles)
+            // Only remove if truly empty AND has no structural elements
+            if (!hasContent && !hasRectangles && !hasPaths)
             {
                 group.Remove();
                 emptyElementsRemoved++;
