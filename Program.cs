@@ -11,10 +11,50 @@ class Program
     static void Main(string[] args)
     {
         string svgDirectory = @"C:\Users\Nicholas\OneDrive - Oughtibridge Ltd\ContSys\ContSys 2026 FDIS\Large Diagrams\svg";
+        string targetFont = "Cambria";
+        bool changeFonts = true;
 
-        if (args.Length > 0)
+        // Parse command-line arguments
+        for (int i = 0; i < args.Length; i++)
         {
-            svgDirectory = args[0];
+            if (args[i].StartsWith("--") || args[i].StartsWith("-"))
+            {
+                string arg = args[i].ToLower();
+                
+                if (arg == "--font" || arg == "-f")
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        targetFont = args[i + 1];
+                        i++; // Skip the next argument as it's the font name
+                    }
+                    else
+                    {
+                        Console.WriteLine("Error: --font requires a font name");
+                        return;
+                    }
+                }
+                else if (arg == "--no-font-change")
+                {
+                    changeFonts = false;
+                }
+                else if (arg == "--help" || arg == "-h" || arg == "-?")
+                {
+                    ShowHelp();
+                    return;
+                }
+                else
+                {
+                    Console.WriteLine($"Unknown option: {args[i]}");
+                    Console.WriteLine("Use --help for usage information");
+                    return;
+                }
+            }
+            else
+            {
+                // First non-option argument is the directory
+                svgDirectory = args[i];
+            }
         }
 
         if (!Directory.Exists(svgDirectory))
@@ -22,6 +62,19 @@ class Program
             Console.WriteLine($"Directory not found: {svgDirectory}");
             return;
         }
+
+        Console.WriteLine("CleanSVG - StarUML to Microsoft Word SVG Converter");
+        Console.WriteLine("===================================================");
+        Console.WriteLine($"Directory: {svgDirectory}");
+        if (changeFonts)
+        {
+            Console.WriteLine($"Target font: {targetFont}");
+        }
+        else
+        {
+            Console.WriteLine("Font conversion: Disabled");
+        }
+        Console.WriteLine();
 
         var svgFiles = Directory.GetFiles(svgDirectory, "*.svg");
         Console.WriteLine($"Found {svgFiles.Length} SVG files to process...\n");
@@ -34,7 +87,7 @@ class Program
             try
             {
                 Console.WriteLine($"Processing: {Path.GetFileName(filePath)}");
-                bool modified = CleanSvgFile(filePath);
+                bool modified = CleanSvgFile(filePath, targetFont, changeFonts);
 
                 filesProcessed++;
                 if (modified)
@@ -61,7 +114,36 @@ class Program
         Console.ReadKey();
     }
 
-    static bool CleanSvgFile(string filePath)
+    static void ShowHelp()
+    {
+        Console.WriteLine("CleanSVG - StarUML to Microsoft Word SVG Converter");
+        Console.WriteLine("===================================================");
+        Console.WriteLine();
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  CleanSVG.exe [directory] [options]");
+        Console.WriteLine();
+        Console.WriteLine("Arguments:");
+        Console.WriteLine("  directory              Path to directory containing SVG files");
+        Console.WriteLine("                         (default: predefined directory)");
+        Console.WriteLine();
+        Console.WriteLine("Options:");
+        Console.WriteLine("  --font <name>, -f      Target font family for conversion");
+        Console.WriteLine("                         (default: Cambria)");
+        Console.WriteLine("  --no-font-change       Skip font conversion");
+        Console.WriteLine("  --help, -h, -?         Show this help message");
+        Console.WriteLine();
+        Console.WriteLine("Examples:");
+        Console.WriteLine("  CleanSVG.exe");
+        Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\"");
+        Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\" --font \"Times New Roman\"");
+        Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\" -f Calibri");
+        Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\" --no-font-change");
+        Console.WriteLine();
+        Console.WriteLine("This tool prepares StarUML SVG diagrams for import into Microsoft Word");
+        Console.WriteLine("by removing incompatible attributes and optionally converting fonts.");
+    }
+
+    static bool CleanSvgFile(string filePath, string targetFont, bool changeFonts)
     {
         var doc = XDocument.Load(filePath, LoadOptions.PreserveWhitespace);
         XNamespace svg = "http://www.w3.org/2000/svg";
@@ -122,8 +204,9 @@ class Program
         }
 
         // Step 4: Process all elements recursively
-        ProcessElement(svgRoot, svg, transformMatrix, ref rectRemoved, ref fontsChanged,
-                      ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
+        ProcessElement(svgRoot, svg, transformMatrix, targetFont, changeFonts, 
+                      ref rectRemoved, ref fontsChanged, ref emptyElementsRemoved, 
+                      ref transformsApplied, ref attributesCleaned, ref modified);
 
         // Step 5: Remove empty <g> elements (do this after processing)
         RemoveEmptyGroups(svgRoot, svg, ref emptyElementsRemoved, ref modified);
@@ -155,7 +238,7 @@ class Program
             if (rectRemoved > 0)
                 Console.WriteLine($"    Rectangles removed: {rectRemoved}");
             if (fontsChanged > 0)
-                Console.WriteLine($"    Fonts changed (Arial → Cambria): {fontsChanged}");
+                Console.WriteLine($"    Fonts changed (Arial → {targetFont}): {fontsChanged}");
             if (transformsApplied > 0)
                 Console.WriteLine($"    Transforms applied: {transformsApplied}");
             if (attributesCleaned > 0)
@@ -168,6 +251,7 @@ class Program
     }
 
     static void ProcessElement(XElement element, XNamespace svg, Matrix transformMatrix,
+                               string targetFont, bool changeFonts,
                                ref int rectRemoved, ref int fontsChanged,
                                ref int emptyElementsRemoved, ref int transformsApplied,
                                ref int attributesCleaned, ref bool modified)
@@ -176,12 +260,14 @@ class Program
         var childGroups = element.Elements(svg + "g").ToList();
         foreach (var group in childGroups)
         {
-            ProcessGroup(group, svg, transformMatrix, ref rectRemoved, ref fontsChanged,
-                        ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
+            ProcessGroup(group, svg, transformMatrix, targetFont, changeFonts,
+                        ref rectRemoved, ref fontsChanged, ref emptyElementsRemoved, 
+                        ref transformsApplied, ref attributesCleaned, ref modified);
         }
     }
 
     static void ProcessGroup(XElement group, XNamespace svg, Matrix transformMatrix,
+                            string targetFont, bool changeFonts,
                             ref int rectRemoved, ref int fontsChanged,
                             ref int emptyElementsRemoved, ref int transformsApplied,
                             ref int attributesCleaned, ref bool modified)
@@ -256,21 +342,24 @@ class Program
             }
         }
 
-        // Change fonts from Arial to Cambria
-        var allTextElements = group.Descendants(svg + "text").ToList();
-        foreach (var textElement in allTextElements)
+        // Change fonts if requested
+        if (changeFonts)
         {
-            var fontFamilyAttr = textElement.Attribute("font-family");
-
-            if (fontFamilyAttr != null)
+            var allTextElements = group.Descendants(svg + "text").ToList();
+            foreach (var textElement in allTextElements)
             {
-                string currentFont = fontFamilyAttr.Value;
+                var fontFamilyAttr = textElement.Attribute("font-family");
 
-                if (currentFont.Equals("Arial", StringComparison.OrdinalIgnoreCase))
+                if (fontFamilyAttr != null)
                 {
-                    fontFamilyAttr.Value = "Cambria";
-                    fontsChanged++;
-                    modified = true;
+                    string currentFont = fontFamilyAttr.Value;
+
+                    if (currentFont.Equals("Arial", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fontFamilyAttr.Value = targetFont;
+                        fontsChanged++;
+                        modified = true;
+                    }
                 }
             }
         }
@@ -279,8 +368,9 @@ class Program
         var nestedGroups = group.Elements(svg + "g").ToList();
         foreach (var nestedGroup in nestedGroups)
         {
-            ProcessGroup(nestedGroup, svg, localMatrix, ref rectRemoved, ref fontsChanged,
-                        ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
+            ProcessGroup(nestedGroup, svg, localMatrix, targetFont, changeFonts,
+                        ref rectRemoved, ref fontsChanged, ref emptyElementsRemoved, 
+                        ref transformsApplied, ref attributesCleaned, ref modified);
         }
     }
 
