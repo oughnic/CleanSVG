@@ -71,6 +71,7 @@ class Program
         int fontsChanged = 0;
         int emptyElementsRemoved = 0;
         int transformsApplied = 0;
+        int attributesCleaned = 0;
 
         var svgRoot = doc.Root;
         if (svgRoot == null) return false;
@@ -150,7 +151,7 @@ class Program
 
         // Step 3: Process all elements recursively
         ProcessElement(svgRoot, svg, transformMatrix, ref rectRemoved, ref fontsChanged,
-                      ref emptyElementsRemoved, ref transformsApplied, ref modified);
+                      ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
 
         // Step 4: Remove empty <g> elements (do this after processing)
         RemoveEmptyGroups(svgRoot, svg, ref emptyElementsRemoved, ref modified);
@@ -185,6 +186,8 @@ class Program
                 Console.WriteLine($"    Fonts changed (Arial → Cambria): {fontsChanged}");
             if (transformsApplied > 0)
                 Console.WriteLine($"    Transforms applied: {transformsApplied}");
+            if (attributesCleaned > 0)
+                Console.WriteLine($"    Word-incompatible attributes cleaned: {attributesCleaned}");
             if (emptyElementsRemoved > 0)
                 Console.WriteLine($"    Empty elements removed: {emptyElementsRemoved}");
         }
@@ -195,21 +198,21 @@ class Program
     static void ProcessElement(XElement element, XNamespace svg, Matrix transformMatrix,
                                ref int rectRemoved, ref int fontsChanged,
                                ref int emptyElementsRemoved, ref int transformsApplied,
-                               ref bool modified)
+                               ref int attributesCleaned, ref bool modified)
     {
         // Process child groups first
         var childGroups = element.Elements(svg + "g").ToList();
         foreach (var group in childGroups)
         {
             ProcessGroup(group, svg, transformMatrix, ref rectRemoved, ref fontsChanged,
-                        ref emptyElementsRemoved, ref transformsApplied, ref modified);
+                        ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
         }
     }
 
     static void ProcessGroup(XElement group, XNamespace svg, Matrix transformMatrix,
                             ref int rectRemoved, ref int fontsChanged,
                             ref int emptyElementsRemoved, ref int transformsApplied,
-                            ref bool modified)
+                            ref int attributesCleaned, ref bool modified)
     {
         var rects = group.Elements(svg + "rect").ToList();
         var texts = group.Elements(svg + "text").ToList();
@@ -233,6 +236,15 @@ class Program
                 modified = true;
             }
         }
+
+        // Clean up Word-incompatible attributes from all elements
+        CleanWordIncompatibleAttributes(group, ref attributesCleaned, ref modified);
+        foreach (var rect in rects)
+            CleanWordIncompatibleAttributes(rect, ref attributesCleaned, ref modified);
+        foreach (var path in paths)
+            CleanWordIncompatibleAttributes(path, ref attributesCleaned, ref modified);
+        foreach (var text in texts)
+            CleanWordIncompatibleAttributes(text, ref attributesCleaned, ref modified);
 
         // RECTANGLE REMOVAL LOGIC - Be extremely conservative to preserve class borders
         // Only remove rectangles that are DEFINITELY problematic overlays
@@ -296,7 +308,56 @@ class Program
         foreach (var nestedGroup in nestedGroups)
         {
             ProcessGroup(nestedGroup, svg, localMatrix, ref rectRemoved, ref fontsChanged,
-                        ref emptyElementsRemoved, ref transformsApplied, ref modified);
+                        ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
+        }
+    }
+
+    static void CleanWordIncompatibleAttributes(XElement element, ref int attributesCleaned, ref bool modified)
+    {
+        // MS Word has issues with certain SVG attributes that are valid but cause parsing to fail
+        var problematicAttributes = new[]
+        {
+            "paint-order",           // Not supported by Word
+            "stroke-miterlimit",     // Should be "stroke-miterlimit" but sometimes causes issues
+            "stroke-dasharray",      // Empty values can cause problems
+            "vector-effect"          // Not supported by Word
+        };
+
+        foreach (var attrName in problematicAttributes)
+        {
+            var attr = element.Attribute(attrName);
+            if (attr != null)
+            {
+                // Remove if empty or if it's a known problematic attribute
+                if (string.IsNullOrWhiteSpace(attr.Value) || 
+                    attrName == "paint-order" || 
+                    attrName == "vector-effect")
+                {
+                    attr.Remove();
+                    attributesCleaned++;
+                    modified = true;
+                }
+            }
+        }
+
+        // Clean up stroke-dasharray if it's empty
+        var dashArray = element.Attribute("stroke-dasharray");
+        if (dashArray != null && string.IsNullOrWhiteSpace(dashArray.Value))
+        {
+            dashArray.Remove();
+            attributesCleaned++;
+            modified = true;
+        }
+
+        // Clean up duplicate Z commands in path data
+        if (element.Name.LocalName == "path")
+        {
+            var d = element.Attribute("d");
+            if (d != null && d.Value.Contains("Z Z"))
+            {
+                d.Value = d.Value.Replace("Z Z", "Z").Trim();
+                modified = true;
+            }
         }
     }
 
