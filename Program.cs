@@ -195,18 +195,36 @@ class Program
             }
         }
 
-        // Remove only transparent or problematic overlay rectangles
-        // Preserve rectangles that serve as borders (those with visible strokes or structural purpose)
+        // RECTANGLE REMOVAL LOGIC - Be extremely conservative to preserve class borders
+        // Only remove rectangles that are DEFINITELY problematic overlays
         foreach (var rect in rects)
         {
             var fill = rect.Attribute("fill")?.Value;
             var stroke = rect.Attribute("stroke")?.Value;
+            var strokeWidth = rect.Attribute("stroke-width")?.Value;
+            var opacity = rect.Attribute("opacity")?.Value;
+            var fillOpacity = rect.Attribute("fill-opacity")?.Value;
 
-            // Only remove rectangles with transparent fill (#FFFFFF00)
-            // Keep all other rectangles, especially those with visible strokes (class borders)
-            bool isTransparent = fill?.Equals("#FFFFFF00", StringComparison.OrdinalIgnoreCase) == true;
+            bool shouldRemove = false;
+
+            // ONLY remove rectangles in these specific cases:
             
-            if (isTransparent)
+            // Case 1: Explicitly transparent fill (8-digit hex with alpha=00)
+            if (fill != null && fill.Length == 9 && fill.EndsWith("00", StringComparison.OrdinalIgnoreCase))
+            {
+                shouldRemove = true;
+            }
+            // Case 2: Element-level opacity is 0
+            else if (opacity == "0" || fillOpacity == "0")
+            {
+                shouldRemove = true;
+            }
+            // DO NOT remove any other rectangles, including:
+            // - White rectangles with stroke (class borders)
+            // - White rectangles without explicit stroke="none"
+            // - Any rectangle that might be structural
+
+            if (shouldRemove)
             {
                 rect.Remove();
                 rectRemoved++;
@@ -343,9 +361,12 @@ class Program
 
         foreach (var group in groups)
         {
-            // Check if group is empty or only contains whitespace/empty elements
-            if (!group.HasElements ||
-                group.Elements().All(e => string.IsNullOrWhiteSpace(e.Value) && !e.HasElements))
+            // Be more careful - only remove groups that are truly empty
+            // Don't remove groups that contain rectangles (they might be class containers)
+            bool hasRectangles = group.Elements(svg + "rect").Any();
+            bool hasContent = group.HasElements && group.Elements().Any(e => !string.IsNullOrWhiteSpace(e.Value) || e.HasElements);
+            
+            if (!hasContent && !hasRectangles)
             {
                 group.Remove();
                 emptyElementsRemoved++;
