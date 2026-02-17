@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -195,33 +195,18 @@ class Program
             }
         }
 
-        // Remove problematic white rectangles
+        // Remove only transparent or problematic overlay rectangles
+        // Preserve rectangles that serve as borders (those with visible strokes or structural purpose)
         foreach (var rect in rects)
         {
             var fill = rect.Attribute("fill")?.Value;
             var stroke = rect.Attribute("stroke")?.Value;
 
-            bool isWhiteBackground = fill?.Equals("#ffffff", StringComparison.OrdinalIgnoreCase) == true ||
-                                    fill?.Equals("#FFFFFF00", StringComparison.OrdinalIgnoreCase) == true;
-
-            bool isNoStroke = stroke?.Equals("none", StringComparison.OrdinalIgnoreCase) == true;
-
-            if (isWhiteBackground && isNoStroke && (texts.Any() || nestedTextGroups.Any()))
-            {
-                var rectIndex = group.Nodes().ToList().IndexOf(rect);
-                var hasTextAfter = group.Nodes().Skip(rectIndex + 1)
-                    .Any(n => n is XElement e &&
-                             (e.Name == svg + "text" ||
-                              (e.Name == svg + "g" && e.Elements(svg + "text").Any())));
-
-                if (hasTextAfter)
-                {
-                    rect.Remove();
-                    rectRemoved++;
-                    modified = true;
-                }
-            }
-            else if (fill?.Equals("#FFFFFF00", StringComparison.OrdinalIgnoreCase) == true)
+            // Only remove rectangles with transparent fill (#FFFFFF00)
+            // Keep all other rectangles, especially those with visible strokes (class borders)
+            bool isTransparent = fill?.Equals("#FFFFFF00", StringComparison.OrdinalIgnoreCase) == true;
+            
+            if (isTransparent)
             {
                 rect.Remove();
                 rectRemoved++;
