@@ -94,46 +94,18 @@ class Program
             }
         }
 
-        // Step 1.5: Add pale blue debug background
-        // Check if debug background already exists
-        var existingDebugBg = svgRoot.Elements(svg + "rect")
+        // Step 2: Remove debug background if it exists (cleanup from previous runs)
+        var debugBackground = svgRoot.Elements(svg + "rect")
             .FirstOrDefault(r => r.Attribute("id")?.Value == "debug-background");
         
-        if (existingDebugBg == null)
+        if (debugBackground != null)
         {
-            // Get viewBox or dimensions for background size
-            var viewBox = svgRoot.Attribute("viewBox")?.Value;
-            string bgWidth = "100%";
-            string bgHeight = "100%";
-            
-            if (viewBox != null)
-            {
-                var parts = viewBox.Split(' ');
-                if (parts.Length == 4)
-                {
-                    bgWidth = parts[2];
-                    bgHeight = parts[3];
-                }
-            }
-            
-            // Create debug background rectangle with pale blue color (#E6F2FF)
-            var debugRect = new XElement(svg + "rect",
-                new XAttribute("id", "debug-background"),
-                new XAttribute("x", "0"),
-                new XAttribute("y", "0"),
-                new XAttribute("width", bgWidth),
-                new XAttribute("height", bgHeight),
-                new XAttribute("fill", "#E6F2FF"),
-                new XAttribute("stroke", "none")
-            );
-            
-            // Insert as first child so it appears behind everything
-            svgRoot.AddFirst(debugRect);
+            debugBackground.Remove();
             modified = true;
-            Console.WriteLine($"    Added pale blue debug background (#E6F2FF)");
+            Console.WriteLine($"    Removed debug background");
         }
 
-        // Step 2: Get the common transform matrix if present
+        // Step 3: Get the common transform matrix if present
         Matrix transformMatrix = null;
         var mainGroup = svgRoot.Elements(svg + "g").FirstOrDefault();
         if (mainGroup != null)
@@ -149,11 +121,11 @@ class Program
             }
         }
 
-        // Step 3: Process all elements recursively
+        // Step 4: Process all elements recursively
         ProcessElement(svgRoot, svg, transformMatrix, ref rectRemoved, ref fontsChanged,
                       ref emptyElementsRemoved, ref transformsApplied, ref attributesCleaned, ref modified);
 
-        // Step 4: Remove empty <g> elements (do this after processing)
+        // Step 5: Remove empty <g> elements (do this after processing)
         RemoveEmptyGroups(svgRoot, svg, ref emptyElementsRemoved, ref modified);
 
         // If modified, save with backup
@@ -367,10 +339,6 @@ class Program
         // Apply transform to rect elements
         foreach (var rect in group.Elements(svg + "rect"))
         {
-            // Skip the debug background rectangle
-            if (rect.Attribute("id")?.Value == "debug-background")
-                continue;
-
             var x = double.Parse(rect.Attribute("x")?.Value ?? "0", CultureInfo.InvariantCulture);
             var y = double.Parse(rect.Attribute("y")?.Value ?? "0", CultureInfo.InvariantCulture);
             var width = double.Parse(rect.Attribute("width")?.Value ?? "0", CultureInfo.InvariantCulture);
