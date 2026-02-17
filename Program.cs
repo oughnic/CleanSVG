@@ -10,7 +10,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        string svgDirectory = @"C:\Users\Nicholas\OneDrive - Oughtibridge Ltd\ContSys\ContSys 2026 FDIS\Large Diagrams\svg";
+        string svgDirectory = Directory.GetCurrentDirectory(); // Default to current directory
         string targetFont = "Cambria";
         bool changeFonts = true;
 
@@ -60,6 +60,8 @@ class Program
         if (!Directory.Exists(svgDirectory))
         {
             Console.WriteLine($"Directory not found: {svgDirectory}");
+            Console.WriteLine("\nUsage: CleanSVG.exe [directory] [options]");
+            Console.WriteLine("Use --help for more information");
             return;
         }
 
@@ -77,6 +79,15 @@ class Program
         Console.WriteLine();
 
         var svgFiles = Directory.GetFiles(svgDirectory, "*.svg");
+        
+        if (svgFiles.Length == 0)
+        {
+            Console.WriteLine("No SVG files found in the specified directory.");
+            Console.WriteLine("\nPress any key to exit...");
+            Console.ReadKey();
+            return;
+        }
+
         Console.WriteLine($"Found {svgFiles.Length} SVG files to process...\n");
 
         int filesProcessed = 0;
@@ -124,7 +135,7 @@ class Program
         Console.WriteLine();
         Console.WriteLine("Arguments:");
         Console.WriteLine("  directory              Path to directory containing SVG files");
-        Console.WriteLine("                         (default: predefined directory)");
+        Console.WriteLine("                         (default: current directory)");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  --font <name>, -f      Target font family for conversion");
@@ -138,6 +149,7 @@ class Program
         Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\" --font \"Times New Roman\"");
         Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\" -f Calibri");
         Console.WriteLine("  CleanSVG.exe \"C:\\My SVG Files\" --no-font-change");
+        Console.WriteLine("  CleanSVG.exe . --font \"Arial\"");
         Console.WriteLine();
         Console.WriteLine("This tool prepares StarUML SVG diagrams for import into Microsoft Word");
         Console.WriteLine("by removing incompatible attributes and optionally converting fonts.");
