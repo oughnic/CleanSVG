@@ -4,12 +4,46 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.2.3)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
+  tag:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version format
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Error: version must start with 'v' followed by a semver number (e.g. v1.2.3)"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        id: set-tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ inputs.version }}"
+          git push origin "${{ inputs.version }}"
+          echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: [tag]
+    if: always() && (github.event_name == 'push' || needs.tag.result == 'success')
     permissions:
       contents: read
     strategy:
@@ -18,9 +52,15 @@ jobs:
           - os: windows-latest
             rid: win-x64
             artifact: CleanSVG-win-x64.exe
+          - os: windows-latest
+            rid: win-arm64
+            artifact: CleanSVG-win-arm64.exe
           - os: ubuntu-latest
             rid: linux-x64
             artifact: CleanSVG-linux-x64
+          - os: ubuntu-latest
+            rid: linux-arm64
+            artifact: CleanSVG-linux-arm64
           - os: macos-latest
             rid: osx-x64
             artifact: CleanSVG-osx-x64
@@ -72,5 +112,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.version || github.ref_name }}
           files: artifacts/*
           generate_release_notes: true
