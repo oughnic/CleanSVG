@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version format
+        run: |
+          if ! echo "${{ inputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "Error: version must start with 'v' followed by a semver number (e.g. v1.2.3)"
+            exit 1
+          fi
+
+      - name: Create and push tag
+        id: set-tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ inputs.version }}"
+          git push origin "${{ inputs.version }}"
+          echo "tag=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [tag]
+    if: always() && (github.event_name == 'push' || needs.tag.result == 'success')
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact: CleanSVG-win-x64.exe
+          - os: windows-latest
+            rid: win-arm64
+            artifact: CleanSVG-win-arm64.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: CleanSVG-linux-x64
+          - os: ubuntu-latest
+            rid: linux-arm64
+            artifact: CleanSVG-linux-arm64
+          - os: macos-latest
+            rid: osx-x64
+            artifact: CleanSVG-osx-x64
+          - os: macos-latest
+            rid: osx-arm64
+            artifact: CleanSVG-osx-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Publish
+        run: dotnet publish -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -o publish
+
+      - name: Rename artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: mv publish/CleanSVG.exe publish/${{ matrix.artifact }}
+
+      - name: Rename artifact (non-Windows)
+        if: runner.os != 'Windows'
+        run: mv publish/CleanSVG publish/${{ matrix.artifact }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: publish/${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4.1.3
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.version || github.ref_name }}
+          files: artifacts/*
+          generate_release_notes: true
